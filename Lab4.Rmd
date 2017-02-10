@@ -50,6 +50,8 @@ From the `glm.nb` object we can extract the  estimates and the estimated varianc
 ```{r}
 betahat = coef(hiv.glm.nb)
 sigma.beta = vcov(hiv.glm.nb)
+summary(hiv.glm.nb)$coef
+sqrt(diag(sigma.beta))
 ```
 
 
@@ -128,18 +130,16 @@ Model appears to capture these features adequately  (may change with other summa
 nsim = 10000
 n = nrow(hiv)
 X = model.matrix(hiv.glm.nb)
-class(hiv.glm.nb) <- "glm"  # over-ride class of "glm.nb"
 
 library(mvtnorm)
 sim.hiv.nb = NULL
 sim.hiv.nb$beta = rmvnorm(nsim, betahat, sigma.beta)  # use GLM to generate beta's
-sim.hiv.nb$sigma = rnorm(nsim, hiv.glm.nb$theta,
-                         hiv.glm.nb$SE.theta) # add slot for theta overide sigma
+sim.hiv.nb$theta = rnorm(nsim, hiv.glm.nb$theta, hiv.glm.nb$SE.theta) # add slot for theta overide sigma
 y.rep = array(NA, c(nsim, n))   # or use matrix
 
 for (i in 1:nsim) {
   mu = exp(X %*% sim.hiv.nb$beta[i,])
-  y.rep[i,] = rnegbin(n, mu=mu, theta=sim.hiv.nb$sigma[i])
+  y.rep[i,] = rnegbin(n, mu=mu, theta=sim.hiv.nb$theta[i])
 }
 
 perc_0 = apply(y.rep, 1, function(x) {mean(x == 0)})
@@ -203,14 +203,14 @@ acts of
 95% CI: ( `r round(100*(1 - ci[2,3:2]), 0)`)
 
 
-##  other predictive comparisons
+##  other predictive comparisons  ISLR approach
 
 Split the data into 2 groups
 
 ```{r train.test}
 set.seed(8675309)
 n.train = floor(.75*n)
-train = sample(1:n, size=n.train, rep=T)
+train = sample(1:n, size=n.train, rep=F)
 hiv.train = hiv[train,]
 hiv.test = hiv[-train,]
 ```
@@ -218,7 +218,7 @@ hiv.test = hiv[-train,]
 Fit model to training data and get in sample predictions:
 
 ```{r train.poi}
-hiv.train.glm = glm(fupacts ~ bs_hiv + log(bupacts + 1) +
+hiv.train.glm = glm(fupacts~ bs_hiv + log( bupacts + 1) +
                           sex + couples + women_alone,
                 data=hiv.train, family=poisson)
 poi.yhat.train = predict(hiv.train.glm)
@@ -251,7 +251,7 @@ Note:  RMSE is bigger on the test set!
 What about NB model?
 
 
-```{r train.poi}
+```{r train.nb}
 hiv.train.nb = glm.nb(fupacts ~ bs_hiv + log(bupacts + 1) +
                           sex + couples + women_alone,
                 data=hiv.train)
@@ -263,7 +263,7 @@ rmse(hiv.test$fupacts, nb.yhat.test)
 
 ```
 
-Very close!   For  the overdispersion correction does not seem to matter!
+Very close!   The overdispersion correction does not seem to matter!
 
 ## Coverage
 
@@ -276,3 +276,5 @@ coverage = function(y, lrw, upr) {
 ```
 
 How to create a prediction interval for Poisson or NegBin predictions?
+
+Simulation!
